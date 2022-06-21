@@ -1,11 +1,17 @@
+from asyncio.windows_events import NULL
 from email.mime import image
 from os import link
+import datetime
 from tracemalloc import start
 from urllib import request
+from webbrowser import get
 import requests
+import cv2
 import io
 from bs4 import BeautifulSoup
+from PIL import Image, ImageTk
 import csv
+import psycopg2
 import mysql.connector
 import re
 import pytesseract
@@ -24,6 +30,13 @@ from pytesseract import (
 )
 from PIL import Image
 
+conn = psycopg2.connect(
+    database="debpklhk8pm1r1",
+    user="wbltcucdruwodn",
+    password="c016724d6cdb482d6ec26e2b3acab2d1677c3287d4e5cefd724d9aa6ff500bb8",
+    host="ec2-54-157-16-196.compute-1.amazonaws.com",
+    port="5432")
+
 
 #URL
 urlTraveloka = 'https://www.traveloka.com/en-id/promotion'
@@ -35,7 +48,7 @@ urlGaruda = 'https://www.garuda-indonesia.com/id/id/special-offers/sales-promoti
 urlCiti = 'https://www.citilink.co.id/events'
 
 
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.82 Safari/537.36'
 }
@@ -81,6 +94,45 @@ hotels = ['archipelago',
           'artotelgroup',
           'marriot bonvoy'
           ]
+
+#Bulan
+bulans = {"januari":1,
+          "january":1,
+          "jan":1,
+          "feb":2,
+          "februari":2,
+          "february":2,
+          "maret":3,
+          "mar":3,
+          "march":3,
+          "april":4,
+          "apr":4,
+          "mei":5,
+          "may":5,
+          "mey":5,
+          "juni":6,
+          "jun":6,
+          "june":6,
+          "julai":7,
+          "juli":7,
+          "jul":7,
+          "july":7,
+          "august":8,
+          "agustus":8,
+          "aug":8,
+          "september":9,
+          "sept":9,
+          "sep":9,
+          "oct":10,
+          "okt":10,
+          "oktober":10,
+          "october":10,
+          "nov":11,
+          "november":11,
+          "des":12,
+          "desember":12,
+          "december":1,
+          }
 
 
 
@@ -400,13 +452,14 @@ def check_location(kot,kal):
 
 
 # ############Potongan dapat, jenis Dapat, lokasi hotel dapat, maskapai dapat, health sudah diperbaiki ###############
+#CLEAR DATE END Start
 
 for peg in itemsPegi:
     nilai = 1
     jenisp = ""
-    judulPegi = peg.find('div', 'caption').find('p').text
-
+    judulPegi = peg.find('div', 'caption').find('p').text   
     end = ""
+    ends = ""
     start = ""
     try:
         durasiPegi = peg.find('p', 'endpromo').text
@@ -427,18 +480,16 @@ for peg in itemsPegi:
             bulan = akhir[1]
             tahun = akhir[2]
             start = tgl+ " " + bulan+ " " + tahun
-
+            
         getHariEnd = end[1]
         getBulanEnd = end[2]
         getTahubEnd = end[3]
-
+        
         ass = getTahubEnd+" "+getBulanEnd+" "+getHariEnd
-        end = ass.format('YYYY-MM-DD')
+        bulana = bulans[str(getBulanEnd).lower()]
+        ends = datetime.date(int(getTahubEnd), bulana, int(getHariEnd))
     except:
         durasiPegi = 'Tidak memiliki durasi'
-
-
-
     linknyaPegi = peg.find('a')['href']
     if "hotel" in judulPegi and "tiket pesawat" in judulPegi:
         jenisp = "flight hotel"
@@ -461,7 +512,7 @@ for peg in itemsPegi:
     elif "dokter" in judulPegi.lower():
         jenisp = "health"
     else:
-        jenisp = ""
+        jenisp = "Kosong"
     imgPegi = peg.find('div', 'thumbnail').find('img')['src']
     if 'http' not in imgPegi:
         imgPegi = 'https://www.pegipegi.com/promo/{}'.format(imgPegi)
@@ -483,7 +534,7 @@ for peg in itemsPegi:
         try:
             temaPegi = deskripsiPegi.find('div', 'wording').text
         except:
-            temaPegi = ''
+            temaPegi = 'kosong'
     rPegi = requests.get(imgPegi, headers=headers)
     imagPegi = Image.open(io.BytesIO(rPegi.content))
     textPegi = pytesseract.image_to_string(imagPegi, lang='eng')
@@ -533,40 +584,20 @@ for peg in itemsPegi:
     except:
         potongan =""
 
-    print("==================")
-    # print("kalimat\n ", textPegi)
-    # print("lokasi =  ", lokasi)
-    # print("lokasi =  ", imgPegi)
-    # print("Waktu =  ", waktu)
-    print("End =  ", jenisp)
-    print("Start =  ", maskapai)
-    print("Start =  ", lokhot)
-    # print("end =  ", end)
-    # print("end =  ", len(end))
-    print("==================")
-
-    db = mysql.connector.connect(
-    host="127.0.0.1", user="admin", password="=@!#254tecmint", database="centproDB")
-    cursor = db.cursor()
+    # db = mysql.connector.connect(
+    # host="127.0.0.1", user="admin", password="=@!#254tecmint", database="centproDB")
+    cursor = conn.cursor()
     sql = ("INSERT INTO promo (name,location,img,description,link,id_website,start_date,end_date,category,discount,maskapai,lokasi_hotel) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
-    val = (judulPegi, lokasi, imgPegi, temaPegi, linknyaPegi, 1,start,end,jenisp,potongan,maskapai,lokhot)
+    val = (judulPegi, lokasi, imgPegi, temaPegi, linknyaPegi, 1,start,ends,jenisp,potongan,maskapai,lokhot)
     cursor.execute(sql, val)
-    db.commit()
+    conn.commit()
     cursor.close()
-    db.close()
+    conn.close()
 
+# ############Jenis dapat, potongan dapat, akomodasi dapat,maskapai, lokasi hotel,###############
+#CLEAR DATE
 
-
-
-
-
-
-
-
-
-############Jenis dapat, potongan dapat, akomodasi dapat,maskapai, lokasi hotel,###############
-
-
+  
 for tik in itemsTiket:
     # try : name = tra.find('div','promo-thumb-desc').text
     # except : name = "Tidak memiliki Judul"
@@ -585,42 +616,64 @@ for tik in itemsTiket:
     try:
         temaTiket = deskripsiTiket.find('div', 'promo-detail-description').text
     except:
-        temaTiket = ''
+        temaTiket = 'kosong'
     try:
         judulTiket = deskripsiTiket.find('div', 'promo-detail-title').text
     except:
-        judulTiket = ''
+        judulTiket = 'kosong'   
+    end = ""
+    aq = NULL
     try:
         periodeTiket = deskripsiTiket.find('div', 'content-wrap-col-right').find('p').text
-
+        
         awal = periodeTiket.split('-')
         st = awal[0]
         en = awal[1]
-        end = en.replace(",","")
+        haa = en.replace(",","")
+        aa = re.sub(' +',' ',haa)
+        ed = aa.split(' ')
+        bula = ed[2]
+        bu = bulans[str(bula).lower()]
+        end = str(bu)+"-"+ed[1]+"-"+ed[3]
+        # end = datetime.date(ed[3], str(bu), ed[1])
+        # date_object = datetime.strptime(end, '%Y-%m-%d').date()
+        aq = datetime.date(int(ed[3]), bu, int(ed[1]))
         sta = ""
         bulan =""
         tahun =""
         start = ""
         if len(st) == 2 :
-            sta = end.split(' ')
+            sta = haa.split(' ')
             bula = sta[2]
-            bulan = bula.replace(",","")
+            bulas = bula.replace(",","")
+            bulan = bulans[str(bulas).lower()]
             tahun = sta[3]
-            start = st + bulan +" "+ tahun
+            # start = st + bulan +" "+ tahun
+            start = datetime.date(int(tahun), bulan, int(st))
         if len(st) > 3:
-            sta = end.split(' ')
-            bula = sta[2]
-            bulan = bula.replace(",","")
-            tahun = sta[3]
-            start = st+" "+ tahun
+            # sta = haa.split(' ')
+            # bula = sta[2]
+            # bulas = bula.replace(",","")
+            # bulan = bulans[str(bulas).lower()]
+            # tahun = sta[3]
+            # start = st+" "+ tahun
+            aas = haa.split(' ')
+            sta = st.split(' ')
+            bula = sta[1]
+            bulas = bula.replace(",","")
+            bulan = bulans[str(bula).lower()]
+            tahun = aas[3]
+            hari = sta[0]
+            start = datetime.date(int(tahun), bulan, int(hari))        
     except:
         periodeTiket = ''
+    imageTiket = ""
     try:
         imageTiket = tik.find('div', 'img-component').find('img')['data-src']
     except:
         imageTiket = "Tidak memiliki gambar"
     akom = ""
-    jenis=""
+    jenis =""
     if "pesawat" in linknyaTiket:
         jenis = "flight"
     elif "campaign" in linknyaTiket:
@@ -642,7 +695,6 @@ for tik in itemsTiket:
     else:
         jenis = ""
     potongan =""
-
     lokhot = ""
     for mas in pesaw:
         if mas.lower() in judulTiket.lower():
@@ -710,44 +762,18 @@ for tik in itemsTiket:
         else:
             if kota.lower() in textPegi.lower():
                 lokasi = kota
-#     print("================")
-#     # print("Kalimat\n : ", periodeTiket)
-#     # print("Start : ", start   )
-#     # print("Panjang Start : ", len(st))
-#     # print("Bulan : ", bulan)
 
-    # print("judul : ", deskripsiTiket)
-    # print("tema : ", temaTiket)
-#     print("potongan : ", potongan)
-    print("jenis : ", jenis)
-    # print("End : ", end)
-    print("End : ", imageTiket)
-    print("================")
-    print("lokasi : ", maskapai)
-    print("image: ", lokhot)
-    print("akomodasi: ", akom)
-    db = mysql.connector.connect(
-    host="127.0.0.1", user="admin", password="=@!#254tecmint", database="centproDB")
-    cursor = db.cursor()
+    cursor = conn.cursor()
     sql = ("INSERT INTO promo (name,location,img,description,link,id_website,start_date,end_date,category,discount,maskapai,lokasi_hotel) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
-    val = (judulTiket, lokasi, imageTiket, temaTiket, linknyaTiket,2,start,end,jenis,potongan,maskapai,lokhot)
-    cursor.execute(sql,val)
-    db.commit()
+    val = (judulTiket, lokasi, imageTiket, temaTiket, linknyaTiket,2,start,aq,jenis,potongan,maskapai,lokhot)
+    cursor.execute(sql, val)
+    conn.commit()
     cursor.close()
-    db.close()
+    conn.close()
 
 
-
-
-
-
-
-
-
-
-
-###########Jenis dapaat, potongan Dapat, maskapai sudah dibuat tapi kosong, lokasi hotel dapat###########
-#     #Start dan End Dapat
+# ###########Jenis dapaat, potongan Dapat, maskapai sudah dibuat tapi kosong, lokasi hotel dapat###########
+# #     #Start dan End Dapat
 for paz in itemsAirpaz:
     judulAirpaz = paz.find('span', 'link normal-b has-text-grey-darker').text
     try:
@@ -756,19 +782,28 @@ for paz in itemsAirpaz:
     durationAirpaz = paz.find('span', 'small-b has-text-grey-darker').text
     waktu = durationAirpaz.split('-')
     tahun = ""
-    end = waktu[1]
+    endd=""
+    akhir = waktu[1]
+    date_end = akhir.split(' ')
+    hari = date_end[1]
+    bulan = bulans[str(date_end[2]).lower()]
+    tahun = date_end[3]
+    endd = datetime.date(int(tahun), bulan, int(hari))        
+    
     star = waktu[0]
     try:
         sta = star.split(' ')
         st = sta[10:]
         starta = ' '.join(map(str, st))
-        tah = end.split(" ")
-        tahun = tah[3]
-        start = starta+tahun
+        bula = starta.split(' ')
+        hariss = bula[0]
+        bulansss = bulans[str(bula[1]).lower()]
+        tahun = date_end[3]
+        start = datetime.date(int(tahun), bulansss, int(hariss)) 
     except:
         start = " "
-
-
+    
+    
     # imgAirpaz = paz.find('div', 'card-image')
     linkAirpaz = paz.find('div', 'button is-light is-fullwidth')['to']
     try:
@@ -849,7 +884,7 @@ for paz in itemsAirpaz:
             d= b[0]
             angka = d[-1]
             potongan = angka + "0.000"
-
+        
     except :potongan =""
     maskapai = ""
     lokhot = ""
@@ -863,45 +898,25 @@ for paz in itemsAirpaz:
             lokhot = hotl
         elif hotl.lower() in tema.lower():
             lokhot = hotl
-    print("#############################")
-    # print("airpaz")
-    print("Judul : ", lokhot)
-    print("Judul : ", maskapai)
-    # print("Tema : ", tema)
-    # print("Duration : ", durationAirpaz)
-    # print("Start : ", start)
-    # print("End : ", end)
-    # print("Link : ", linkAirpaz)
-    # print("Kalimat :\n ",textPegi)
-    # print("Image : ",imageAirpaz)
-    # print("Jenis : ", lokasi)
-    # print("Jenis : ", lokasi)
-    print("############################# \n")
-    db = mysql.connector.connect(
-    host="127.0.0.1", user="admin", password="=@!#254tecmint", database="centproDB")
-    cursor = db.cursor()
+
+    cursor = conn.cursor()
     sql = ("INSERT INTO promo (name,location,img,description,link,id_website,start_date,end_date,category,discount,maskapai,lokasi_hotel) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
-    val = (judulAirpaz, lokasi, imageAirpaz, tema, linkAirpaz, 4,start,end,jenis,potongan,maskapai,lokhot)
+    val = (judulAirpaz, lokasi, imageAirpaz, tema, linkAirpaz, 4,start,endd,jenis,potongan,maskapai,lokhot)
     cursor.execute(sql, val)
-    db.commit()
+    conn.commit()
     cursor.close()
-    db.close()
+    conn.close()
+
+# # Masih tahap explorasi untuk  date 
+
+
+# # Start - End Date
 
 
 
 
-
-
-# Masih tahap explorasi untuk  date
-
-
-# Start - End Date
-
-
-
-
-#####################Jenis dapat, Potongan gk dapat,  tidak memiliki maskapai dan lokasi hotel pada website################
-# Belum DAPAT START and Date
+# #####################Jenis dapat, Potongan gk dapat,  tidak memiliki maskapai dan lokasi hotel pada website################
+# # Belum DAPAT START and Date
 
 for gar in itemsCit:
     judul = gar.text
@@ -941,6 +956,57 @@ for gar in itemsCit:
     else:
         jenis = "lainnya"
     lokasi = ""
+    potongan=""
+    try:
+        if ".000.000" in textPegi:
+            b = textPegi.split('.000.000')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + ".000.000"
+        elif "00.000" in textPegi:
+            b = textPegi.split('00.000')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + "00.000"
+        elif "49.000" in tema:
+            b = tema.split('49.000')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + "49.000"
+        elif "00.000" in tema:
+            b = tema.split('00.000')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + "00.000"
+        elif "0.000" in textPegi:
+            b = textPegi.split('0.000')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + "0.000"
+        elif "00rb" in textPegi:
+            b = textPegi.split('00.000')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + "00.000"
+        elif "0rb" in textPegi:
+            b = textPegi.split('0.000')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + "0.000"
+        elif "0%" in textPegi:
+            b = textPegi.split('0%')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + "0%"
+        elif "0%" in textPegi:
+            b = textPegi.split('0%')
+            d= b[0]
+            angka = d[-1]
+            potongan = angka + "0%"
+        elif "100%" in textPegi :
+            potongan = "100%"
+    except:
+        potongan=""
     for kota in kotas:
         if kota.lower() in judul.lower():
             lokasi = kota
@@ -948,36 +1014,24 @@ for gar in itemsCit:
         else:
             if kota.lower() in textPegi.lower():
                 lokasi = kota
-    # if 'http' not in img : img = 'https://www.pegipegi.com/promo/{}'.format(img)
-    print("#############################")
-    print("Citi")
-    print("Judul : ", judul)
-    print("Text : ", textPegi)
-    print("lokasi : ", lokasi)
-    print("Image : ", img)
-    print("jenis : ", jenis)
-    print("Link : ", link)
-    print("Tema : ", tema)
-    print("durasi : ", duration)
-    print("############################# \n")
-    db = mysql.connector.connect(
-    host="127.0.0.1", user="admin", password="=@!#254tecmint", database="centproDB")
-    cursor = db.cursor()
+   
+    cursor = conn.cursor()
     sql = ("INSERT INTO promo (name,location,img,description,link,id_website,category) VALUES (%s, %s, %s, %s, %s, %s, %s)")
     val = (judul, lokasi, img, tema, linka,7,jenis)
     cursor.execute(sql, val)
-    db.commit()
+    conn.commit()
     cursor.close()
-    db.close()
+    conn.close()
+    
+    
+    
+    
+    
+# ##################Potongan dapat , jenis dapat##############
 
-
-
-
-
-##################Potongan dapat , jenis dapat##############
-
-
-# End Time dapat , start tidak tersedia
+  
+# # End Time dapat , start tidak tersedia
+########Date Time Clear###########
 for nusa in itemsNusa:
     try:
         judulNusa = nusa.find('div', {'class': 'txt-ket'}).text
@@ -1004,11 +1058,13 @@ for nusa in itemsNusa:
             temaNusa = deskripsi.find('div', 'line2').text
     except:
         temaNusa = "Tidak memiliki deskripsi"
-
+    
     dur = judulNusa
     dura = dur.split("s.d.")
     durat = dura[1]
     end = durat.replace(" | Terbang:","")
+    endd = end.split(" ")
+    enddd = datetime.date(int(2022), int( bulans[str(endd[2]).lower()]), int(endd[1]))
 
     if "pesawat" in linkNusa and "hotel" in linkNusa:
         jenis = "flight hotel"
@@ -1030,7 +1086,7 @@ for nusa in itemsNusa:
             if kota.lower() in textPegi.lower():
                 lokasi = kota
     potongan = ""
-
+    
     try:
         if "1.2" in judulNusa:
             potongan = "1.200.000"
@@ -1039,43 +1095,16 @@ for nusa in itemsNusa:
         elif "1.050" in judulNusa:
             potongan = "1.050.000"
     except: potongan=""
-
-    print("#############################")
-    print(jenis)
-    # print("Judul : ", judulNusa)
-    print("Text : ", textPegi)
-    print("image : ", imgNusa)
-    print("lokasi : ", lokasi)
-    print("Detail : ", linkNusa)
-    print("end : ", potongan)
-    print("tema : ", temaNusa)
-
-    print("############################# \n")
-    db = mysql.connector.connect(
-    host="127.0.0.1", user="admin", password="=@!#254tecmint", database="centproDB")
-    cursor = db.cursor()
-    sql = ("INSERT INTO promo (name,location,img,description,link,id_website,end_date,category,discount) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)")
-    val = (judulNusa, lokasi, imgNusa, temaNusa, linkNusa, 5,end,jenis,potongan)
+    
+    cursor = conn.cursor()
+    sql = ("INSERT INTO promo (name,location,img,description,link,id_website,end_date,category,discount,end_date) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
+    val = (judulNusa, lokasi, imgNusa, temaNusa, linkNusa, 5,end,jenis,potongan,enddd)
     cursor.execute(sql, val)
-    db.commit()
+    conn.commit()
     cursor.close()
-    db.close()
+    conn.close()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-######Potongan harga dapat tapi jenis tidak dapat,maskapai dapat,akommodasi dan lokasi hotel kosong##########
+# ######Potongan harga dapat tapi jenis tidak dapat,maskapai dapat,akommodasi dan lokasi hotel kosong##########
 
 
 for gar in itemsGar:
@@ -1132,41 +1161,17 @@ for gar in itemsGar:
                 lokasi = kota
     maskapai = "garuda"
 
-    # imageAirpaz = paz.find('img')['data-src']
-    print("#############################")
-    print("Garuda")
-    # print("lokasi : ", lokasi)
-    print("kata : ", textPegi)
-    print("Image : ", img)
-    print("Potongan : ", potongan)
-    print("Judul : ", judul)
-    print("link : ", link)
-    print("deskripsi : ", tema)
-    print("Durasi : ", duration)
-    print("############################# \n")
-    db = mysql.connector.connect(
-    host="127.0.0.1", user="admin", password="=@!#254tecmint", database="centproDB")
-    cursor = db.cursor()
+    cursor = conn.cursor()
     sql = ("INSERT INTO promo (name,location,img,description,link,id_website,discount) VALUES (%s, %s, %s, %s, %s, %s, %s)")
     val = (judul, lokasi, img, tema, link, 6,potongan)
     cursor.execute(sql, val)
-    db.commit()
+    conn.commit()
     cursor.close()
-    db.close()
+    conn.close()
 
-
-
-
-
-
-
-
-
-
-#####Jenis,Potongan DAPAT, maskapai sudah dapat, lokasi hotel sudah, akomodasi sudah###########
+# #####Jenis,Potongan DAPAT, maskapai sudah dapat, lokasi hotel sudah, akomodasi sudah###########
 
 for tra in itemsTraveloka:
-    maskapai = ""
     try:
         judulTraveloka = tra.find('div', 'promo-thumb-desc').text
     except:
@@ -1175,6 +1180,7 @@ for tra in itemsTraveloka:
         aq = tra["data-product"]
     except : aq=""
     akom = ""
+    maskapai = ""
     if "flight" in aq:
         jenis = "flight"
     # elif " flight" in aq & "hotel" in aq:
@@ -1192,26 +1198,129 @@ for tra in itemsTraveloka:
         jenis = "akomodasi"
     else :
         jenis = ""
-
+    
     start =""
     saa=""
+    end=""
+    special =" "
     try:
-        durationTraveloka = tra.find('div', 'promo-thumb-duration').text
+        durationTraveloka = tra.find('div', 'promo-thumb-duration').find('p').text
     except:
         durationTraveloka = ""
-
+    
     try:
-        san = durationTraveloka.split('\n')
-        a = san[1]
-        awal = san[1].split('-', 1)
-        pisah = awal[0].split(':')
-        hasil = pisah[1]
-        if "until" in hasil .lower():
-            saa = hasil.lower();
-            z = saa.replace("until","")
-            end = z
-    except : start =""
-
+        special = durationTraveloka.replace("!"," ")
+        if "Promo period:" in special:
+            cleans = special.replace("Promo period: ","")
+            special = cleans
+            if "until" in special.lower():
+                a = special.replace("until","")
+                # akhirr = a.strip
+                akhirrr = a.split(" ")
+                bulansss = bulans[str(akhirrr[3]).lower()]
+                end = datetime.date(int(akhirrr[4]), bulansss, int(akhirrr[2]))
+                # end = akhirrr
+                
+            if "-" in special:
+                special = special.split("-")
+                getAwal = special[0]
+                getAkhir = special[1]
+                awalss = getAwal.strip().split(" ")
+                enda = getAkhir.split(" ")
+                bulansss = bulans[str(enda[2]).lower()]
+                bulanssa = ""
+                try:
+                    bulanssa =  bulans[str(awalss[1]).lower()]
+                except: bulanssa=""
+                try:
+                    if bulanssa != "":
+                        start = datetime.date(int(enda[3]), bulanssa, int(awalss[0]))    
+                    else:
+                        start = datetime.date(int(enda[3]), bulansss, int(awalss[0]))
+                except:
+                    start = ""
+                # try:
+                #     start = 
+                # except:start =""
+                try:
+                    end = datetime.date(int(enda[3]), bulansss, int(enda[1]))
+                except: end=""
+        if "Booking period:" in special:
+            cleans = special.replace("Booking period: ","")
+            special = cleans     
+            if "until" in special.lower():
+                a = special.replace("until","")
+                # akhirr = a.strip
+                akhirrr = a.split(" ")
+                bulansss = bulans[str(akhirrr[3]).lower()]
+                end = datetime.date(int(akhirrr[4]), bulansss, int(akhirrr[2]))          
+            if "-" in special:
+                special = special.split("-")
+                getAwal = special[0]
+                getAkhir = special[1]
+                awalss = getAwal.strip().split(" ")
+                enda = getAkhir.split(" ")
+                bulansss = bulans[str(enda[2]).lower()]
+                bulanssa = ""
+                try:
+                    bulanssa =  bulans[str(awalss[1]).lower()]
+                except: bulanssa=""
+                try:
+                    if bulanssa != "":
+                        start = datetime.date(int(enda[3]), bulanssa, int(awalss[0]))    
+                    else:
+                        start = datetime.date(int(enda[3]), bulansss, int(awalss[0]))
+                except:
+                    start = ""
+                try:
+                    end = datetime.date(int(enda[3]), bulansss, int(enda[1]))
+                except: end=""
+        if "Booking period :" in special:
+            cleans = special.replace("Booking period : ","")
+            special = cleans  
+            if "until" in special.lower():
+                a = special.replace("until","")
+                # akhirr = a.strip
+                akhirrr = a.split(" ")
+                bulansss = bulans[str(akhirrr[3]).lower()]
+                end = datetime.date(int(akhirrr[4]), bulansss, int(akhirrr[2]))
+            if "-" in special:
+                special = special.split("-")  
+                getAwal = special[0]
+                getAkhir = special[1]
+                awalss = getAwal.strip().split(" ")
+                enda = getAkhir.split(" ")  
+                bulansss = bulans[str(enda[2]).lower()]
+                bulanssa = ""
+                try:
+                    bulanssa =  bulans[str(awalss[1]).lower()]
+                except: bulanssa=""
+                try:
+                    if bulanssa != "":
+                        start = datetime.date(int(enda[3]), bulanssa, int(awalss[0]))    
+                    else:
+                        start = datetime.date(int(enda[3]), bulansss, int(awalss[0]))
+                except:
+                    start = ""        
+                try:
+                    end = datetime.date(int(enda[3]), bulansss, int(enda[1]))
+                except: end=""
+        
+    except: special = " "
+    # try:    
+    #     san = durationTraveloka.split('\n')
+    #     a = san[1]
+    #     awal = san[1].split('-', 1)
+    #     pisah = awal[0].split(':')
+    #     hasil = pisah[1]
+    #     if "until" in hasil.lower():
+    #         saa = hasil.lower();
+    #         z = saa.replace("until","")
+    #         end = z
+    #     else:
+    #         print("ahir",a)
+    # except : start =""
+        
     try:
         linknyaTraveloka = tra.find('a')['href']
         if 'http' not in linknyaTraveloka:
@@ -1237,10 +1346,10 @@ for tra in itemsTraveloka:
         inga = tra.find('div', 'promo-thumb-img').find('img')['src']
         pisah = inga.split("?")
         imageTraveloka = pisah[0]
-
+        
     except:
         imageTraveloka = ""
-
+    
     rPegi = requests.get(imageTraveloka, headers=headers)
     imagPegi = Image.open(io.BytesIO(rPegi.content))
     textPegi = pytesseract.image_to_string(imagPegi, lang='eng')
@@ -1295,6 +1404,7 @@ for tra in itemsTraveloka:
                 lokasi = kota
         if lokasi is None:
             lokasi = check_location(kotas, textPegi.lower())
+    
     lokhot = ""
     for mas in pesaw:
         if mas.lower() in judulTraveloka.lower():
@@ -1306,34 +1416,12 @@ for tra in itemsTraveloka:
             lokhot = hotl
         elif hotl.lower() in temaTraveloka.lower():
             lokhot = hotl
-    print("#############################")
-    print("TRAVELOKA")
-    # print("durasi : ", durationTraveloka)
-    # print("Time : ", hasil)
-    # print("panjang : ", len(hasil))
-    # print("kalimat", textPegi)
-    # print("lokasi", lokasi)
-    # print("Judul : ",judulTraveloka)
-    # print("kata : ", b)
-    # print("Potongan : ", potongan)
-    # print("Durasi : ", durationTraveloka)
-    # print("start : ", hasil)
-    # print("end : ", durationTraveloka)
-    # print("Deskripsi : ",temaTraveloka)
-    # print("Link Detail : ",linknyaTraveloka )
-    # print("Link Image : ",imageTraveloka)
-    # print("Jenis : ", saa)
-    print("Jenis : ", jenis)
-    print("Jenis : ", akom)
-    print("Jenis : ", maskapai)
-    print("Jenis : ", lokhot)
-    print("############################# \n")
-    db = mysql.connector.connect(
-    host="127.0.0.1", user="admin", password="=@!#254tecmint", database="centproDB")
-    cursor = db.cursor()
-    sql = ("INSERT INTO promo (name,location,img,description,link,id_website,discount,category,maskapai,lokasi_hotel) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
-    val = (judulTraveloka, lokasi, imageTraveloka, temaTraveloka, linknyaTraveloka, 3,potongan,jenis,maskapai,lokhot)
+            
+    cursor = conn.cursor()
+    sql = ("INSERT INTO promo (name,location,img,description,link,id_website,discount,category,maskapai,lokasi_hotel,start_date,end_date) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
+    val = (judulTraveloka, lokasi, imageTraveloka, temaTraveloka, linknyaTraveloka, 3,potongan,jenis,maskapai,lokhot,start,end)
     cursor.execute(sql, val)
-    db.commit()
+    conn.commit()
     cursor.close()
-    db.close()
+    conn.close()
+    
